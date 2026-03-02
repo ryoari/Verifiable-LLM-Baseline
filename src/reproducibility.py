@@ -2,6 +2,7 @@ import torch
 import torch.nn.functional as F
 import json
 import math
+import platform, sys
 from model import TinyGPT
 from dataset import TinyDataset
 from main import set_seed
@@ -40,6 +41,15 @@ def run_training_segment(start_step, end_step, checkpoint_path_to_load=None, log
             print(f" ~> Prover saved checkpoint at step 5")
             
 if __name__ == "__main__":
+    fingerprint = {
+    "torch": torch.__version__,
+    "python": sys.version,
+    "os": platform.platform(),
+    "cpu": platform.processor()
+}
+    with open("env_fingerprint.json", "w") as f:
+        json.dump(fingerprint, f, indent=2)
+        
     print("\n SEGMENTED AUDIT VERIFICATION ")
 
     print("\n[Running Prover: Steps 0 to 10]")
@@ -65,7 +75,9 @@ if __name__ == "__main__":
         for p, a in zip(prover_segment, auditor_logs):
             step_match = p['step'] == a['step']
             loss_match = math.isclose(p['loss'], a['loss'], rel_tol=1e-6)
-            step_ok = step_match and loss_match
+            grad_match = math.isclose(p['grad_norm'], a['grad_norm'], rel_tol=1e-6)
+            param_match = math.isclose(p['param_norm'], a['param_norm'], rel_tol=1e-6)
+            step_ok = step_match and loss_match and grad_match and param_match
             if not step_ok:
                 match = False
             status = "ok" if step_ok else "error"

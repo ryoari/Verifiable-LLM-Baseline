@@ -1,6 +1,8 @@
 import json
+from xml.parsers.expat import model
 import torch
 import os
+import hashlib
 
 class TelemetryLogger:
     def __init__(self, filepath="audit_log.jsonl"):
@@ -22,12 +24,18 @@ class TelemetryLogger:
 
         record ={
             "step": step,
-            "loss": round(loss, 8),
-            "grad_norm": round(grad_norm, 8),
-            "param_norm": round(param_norm, 8)
+            "loss": loss,
+            "grad_norm": grad_norm,
+            "param_norm": param_norm
         }
 
         with open(self.filepath, 'a') as f:
             f.write(json.dumps(record) + '\n')
         
         return record
+    
+    def hash_model(self, model):
+        h = hashlib.sha256()
+        for p in model.parameters():
+            h.update(p.data.cpu().numpy().tobytes())
+        return h.hexdigest()
