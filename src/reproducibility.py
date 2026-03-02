@@ -9,7 +9,8 @@ from main import set_seed
 from telemetry import TelemetryLogger
 
 def run_training_segment(start_step, end_step, checkpoint_path_to_load=None, log_file="audit.jsonl"):
-    set_seed(99)
+    if not checkpoint_path_to_load:
+        set_seed(99)
     dataset = TinyDataset()
     model = TinyGPT(vocab_size=dataset.vocab_size)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
@@ -19,6 +20,7 @@ def run_training_segment(start_step, end_step, checkpoint_path_to_load=None, log
         checkpoint = torch.load(checkpoint_path_to_load, weights_only=True)
         model.load_state_dict(checkpoint['model'])
         optimizer.load_state_dict(checkpoint['optimizer'])
+        torch.set_rng_state(checkpoint['rng_state'])
         print(f" ~> Auditor loaded checkpoint from step {start_step}")
 
     x, y = dataset.get_batch()
@@ -36,10 +38,133 @@ def run_training_segment(start_step, end_step, checkpoint_path_to_load=None, log
         if not checkpoint_path_to_load and step == 4:
             torch.save({
                 'model': model.state_dict(),
-                'optimizer': optimizer.state_dict()
+                'optimizer': optimizer.state_dict(),
+                'rng_state':torch.get_rng_state(),
+                'numpy_rng': torch.initial_seed()
             }, "mid_checkpoint.pt")
             print(f" ~> Prover saved checkpoint at step 5")
-            
+
+def bad_seed_auditor(log_file="bad_seed_log.jsonl"):
+    #test 1: correct checkpoint, wrong seed
+
+    dataset = TinyDataset()
+    model = TinyGPT(vocab_size=dataset.vocab_size)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    logger = TelemetryLogger(filepath=log_file)
+
+    checkpoint = torch.load("mid_checkpoint.pt", weights_only=True)
+    model.load_state_dict(checkpoint['model'])
+    optimizer.load_state_dict(checkpoint['optimizer'])
+
+    set_seed(42) #BAD SEED
+    print(f" ~> Tampered auditor loaded checkpoint with BAD seed (42)")
+
+    x, y = dataset.get_batch()
+
+    for step in range(5, 10):
+        logits = model(x)
+        loss = F.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        logger.log_step(step, loss.item(), model)
+    
+def secret_noise_auditor(log_file="secret_noise_log.jsonl"):
+    #test 2: correct checkpoint, correct seed, but secret noise added to gradients
+
+    set_seed(99) #GOOD SEED
+
+    dataset = TinyDataset()
+    model = TinyGPT(vocab_size=dataset.vocab_size)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    logger = TelemetryLogger(filepath=log_file)
+
+    checkpoint = torch.load("mid_checkpoint.pt", weights_only=True)
+    model.load_state_dict(checkpoint['model'])
+    optimizer.load_state_dict(checkpoint['optimizer'])
+
+    print(f" ~> Tampered auditor loaded checkpoint with GOOD seed but will add secret noise to gradients")
+
+    x, y = dataset.get_batch()
+
+    for step in range(5, 10):
+        logits = model(x)
+        loss = F.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
+        optimizer.zero_grad()
+        loss.backward()
+
+        # Add secret noise to gradients
+        with torch.no_grad():
+            for p in model.parameters():
+                if p.grad is not None:
+                    p.grad += torch.randn_like(p.grad) * 1e-10  # Small noise
+
+        optimizer.step()
+        logger.log_step(step, loss.item(), model)
+
+def verify(prover_segment, auditor_logs, label="AUDIT"):
+    """Shared verification logic with drift quantification."""
+    print(f"\n[Verifying: {label}]")
+
+    if len(prover_segment) != len(auditor_logs):
+        print(f"Log length mismatch — prover: {len(prover_segment)}, auditor: {len(auditor_logs)}")
+        return False
+
+    match = True
+    for p, a in zip(prover_segment, auditor_logs):
+        step_match = p['step'] == a['step']
+        loss_match = math.isclose(p['loss'], a['loss'], rel_tol=1e-6)
+        grad_match = math.isclose(p['grad_norm'], a['grad_norm'], rel_tol=1e-6)
+        param_match = math.isclose(p['param_norm'], a['param_norm'], rel_tol=1e-6)
+        step_ok = step_match and loss_match and grad_match and param_match
+
+        if not step_ok:
+            match = False
+            delta = abs(p['loss'] - a['loss'])
+            print(f"Step {p['step']} | Prover: {p['loss']:.8f} | Auditor: {a['loss']:.8f} | Δ {delta:.2e} ❌")
+        else:
+            print(f"Step {p['step']} | Prover: {p['loss']:.8f} | Auditor: {a['loss']:.8f} | ✅")
+
+    if match:
+        print(f"\n (❁´◡`❁) {label} PASSED: Segment replay is bitwise deterministic.")
+    else:
+        print(f"\n (╯°□°）╯︵ ┻━┻  {label} FAILED: Trajectories diverged.")
+
+    return match
+
+if __name__ == "__main__":
+    # Baseline: should pass
+    print("\n Scenario 1: CLEAN AUDIT ")
+    run_training_segment(start_step=0, end_step=10, log_file="prover_log.jsonl")
+    run_training_segment(start_step=5, end_step=10, checkpoint_path_to_load="mid_checkpoint.pt", log_file="auditor_log.jsonl")
+
+    with open("prover_log.jsonl") as f:
+        prover_logs = [json.loads(line) for line in f]
+    with open("auditor_log.jsonl") as f:
+        auditor_logs = [json.loads(line) for line in f]
+
+    verify(prover_logs[5:10], auditor_logs, label="CLEAN AUDIT")
+
+    # Test 1: Bad seed: should fail
+    print("\n Scenario 2: BAD SEED")
+    bad_seed_auditor()
+
+    with open("bad_seed_log.jsonl") as f:
+        tampered_logs = [json.loads(line) for line in f]
+
+    verify(prover_logs[5:10], tampered_logs, label="BAD SEED AUDIT")
+
+    # Test 2: Noisy weights: should fail 
+    print("\n Scenario 3: NOISE INJECTED")
+    secret_noise_auditor()
+
+    with open("secret_noise_log.jsonl") as f:
+        noisy_logs = [json.loads(line) for line in f]
+
+    verify(prover_logs[5:10], noisy_logs, label="NOISY WEIGHTS AUDIT")
+
+# Uncomment the following lines to run only the Segmented audit verification:
+'''           
 if __name__ == "__main__":
     fingerprint = {
     "torch": torch.__version__,
@@ -49,7 +174,7 @@ if __name__ == "__main__":
 }
     with open("env_fingerprint.json", "w") as f:
         json.dump(fingerprint, f, indent=2)
-        
+
     print("\n SEGMENTED AUDIT VERIFICATION ")
 
     print("\n[Running Prover: Steps 0 to 10]")
@@ -88,6 +213,7 @@ if __name__ == "__main__":
         else:
             print("\n (╯°□°）╯︵ ┻━┻ \nAUDIT FAILED: Trajectories diverged.")
 
+'''
 #Reproducibility test for tinyGPT without Segment Verification test
 #uncomment this block and comment the others to not have segment verification
 '''

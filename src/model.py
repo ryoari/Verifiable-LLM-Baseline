@@ -7,11 +7,12 @@ from torch.nn import functional as F
 import math
 
 class CausalSelfAttention(nn.Module):
-    def __init__(self, embed_dim, num_heads, max_seq_len):
+    def __init__(self, embed_dim, num_heads, max_seq_len, dropout=0.1):
         super().__init__()
         assert embed_dim % num_heads == 0
         self.c_attn = nn.Linear(embed_dim, 3 * embed_dim)
         self.c_proj = nn.Linear(embed_dim, embed_dim)
+        self.attn_dropout = nn.Dropout(dropout)
         self.n_head = num_heads
         self.n_embd = embed_dim
 
@@ -29,13 +30,14 @@ class CausalSelfAttention(nn.Module):
         att = (q @k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
         att = att.masked_fill(self.bias[:, :, :T, :T] == 0, float('-inf'))
         att = F.softmax(att, dim=-1)
+        att = self.attn_dropout(att)
 
         y = att @ v
         y = y.transpose(1, 2).contiguous().view(B, T, C)
         return self.c_proj(y)
 
 class Block(nn.Module):
-    def __init__(self, embed_dim, num_heads, max_seq_len):
+    def __init__(self, embed_dim, num_heads, max_seq_len, dropout=0.1):
         super().__init__()
         self.ln_1 = nn.LayerNorm(embed_dim)
         self.attn = CausalSelfAttention(embed_dim, num_heads, max_seq_len)
@@ -43,6 +45,7 @@ class Block(nn.Module):
         self.mlp = nn.Sequential(
             nn.Linear(embed_dim, 4 * embed_dim),
             nn.GELU(),
+            nn.Dropout(dropout),
             nn.Linear(4 * embed_dim, embed_dim)
         )
     
@@ -52,12 +55,12 @@ class Block(nn.Module):
         return x
     
 class TinyGPT(nn.Module):
-    def __init__(self, vocab_size, embed_dim=16, num_heads=2, max_seq_len=32):
+    def __init__(self, vocab_size, embed_dim=16, num_heads=2, max_seq_len=32, dropout=0.1):
         super().__init__()
         self.transformer = nn.ModuleDict(dict(
             wte = nn.Embedding(vocab_size, embed_dim),
             wpe = nn.Embedding(max_seq_len, embed_dim),
-            h = nn.ModuleList([Block(embed_dim, num_heads, max_seq_len)]),
+            h = nn.ModuleList([Block(embed_dim, num_heads, max_seq_len, dropout)]),
             ln_f = nn.LayerNorm(embed_dim)
         ))
         self.lm_head = nn.Linear(embed_dim, vocab_size, bias=False)
