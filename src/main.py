@@ -31,8 +31,9 @@ x, y = dataset.get_batch()
 print("Input:", x)
 print("Target:", y)
 
-#for linear Model
 
+#for linear Model
+#uncomment this block , when running the liner model code blocks
 '''
 import torch.optim as optim
 import torch.nn as nn

@@ -1,24 +1,3 @@
-# linear model as the starting point, nanoGPT next
-# Unblock this code block to check the linear model out
-# :ATTENTION: Remember to block out the remaining code blocks
- 
-'''
-import torch.nn as nn
-
-class TinyModel(nn.Module):
-    def __init__(self, vocab_size, embed_dim=16):
-        super().__init__()
-        self.embed = nn.Embedding(vocab_size, embed_dim)
-        self.linear = nn.Linear(embed_dim, vocab_size)
-    
-    def forward(self, x):
-        x = self.embed(x)
-        x = x.mean(dim=0)
-        logits = self.linear(x)
-        return logits
-
-'''
-
 # Determinitic NanoGPT model
 # Andrej Karpathy's NanoGPT, Source:https://github.com/karpathy/nanoGPT
 
@@ -98,3 +77,23 @@ class TinyGPT(nn.Module):
         logits = self.lm_head(x)
         return logits
     
+# linear model was the starting point, nanoGPT after
+# Unblock this code block to check the linear model out
+# :ATTENTION: Remember to block out the remaining code blocks
+ 
+'''
+import torch.nn as nn
+
+class TinyModel(nn.Module):
+    def __init__(self, vocab_size, embed_dim=16):
+        super().__init__()
+        self.embed = nn.Embedding(vocab_size, embed_dim)
+        self.linear = nn.Linear(embed_dim, vocab_size)
+    
+    def forward(self, x):
+        x = self.embed(x)
+        x = x.mean(dim=0)
+        logits = self.linear(x)
+        return logits
+
+'''
