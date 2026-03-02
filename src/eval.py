@@ -1,0 +1,58 @@
+import torch
+import torch.nn.functional as F
+import json
+import math
+import hashlib
+from model import TinyGPT
+from dataset import TinyDataset
+from main import set_seed
+
+def hash_model(model):
+    h = hashlib.sha256()
+    for p in model.parameters():
+        h.update(p.data.cpu().numpy().tobytes())
+    return h.hexdigest()
+
+def hash_dict(d):
+    encoded = json.dumps(d, sort_keys=True).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+if __name__ == "__main__":
+    set_seed(99)
+
+    dataset = TinyDataset()
+    model = TinyGPT(vocab_size=dataset.vocab_size)
+
+    checkpoint = torch.load("mid_checkpoint.pt", weights_only=False)
+    model.load_state_dict(checkpoint['model'])
+    model.eval()  # disabling dropout for eval as results must be deterministic
+
+    model_hash = hash_model(model)
+    print(f" ~> Model loaded | checkpoint hash: {model_hash[:16]}...")
+
+    # Held-out eval which is never seen during training
+    x, y = dataset.get_batch()
+
+    with torch.no_grad():
+        logits = model(x)
+        loss = F.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
+
+    perplexity = math.exp(loss.item())
+
+    print(f" ~> Eval loss:    {loss.item():.8f}")
+    print(f" ~> Perplexity:   {perplexity:.5f}")
+
+    # Build manifest — hash is computed over content, not including itself
+    manifest = {
+        "model_checkpoint_hash": model_hash,
+        "eval_dataset": "lorem ipsum dolor sit amet",
+        "eval_loss": round(loss.item(), 8),
+        "perplexity": round(perplexity, 5),
+    }
+    manifest["eval_manifest_hash"] = hash_dict(manifest)
+
+    with open("eval_manifest.json", "w") as f:
+        json.dump(manifest, f, indent=2)
+
+    print(f"\n ~> Manifest saved to eval_manifest.json")
+    print(json.dumps(manifest, indent=2))
