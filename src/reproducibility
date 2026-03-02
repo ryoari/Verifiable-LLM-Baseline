@@ -1,0 +1,51 @@
+import torch
+#for linear model: from model import TinyModel
+from model import TinyGPT
+from dataset import TinyDataset
+import torch.nn.functional as F
+from main import set_seed
+
+def train_once():
+    set_seed(99)
+
+    dataset = TinyDataset()
+    #for linear model: model = TinyModel(vocab_size=dataset.vocab_size)
+    model = TinyGPT(vocab_size=dataset.vocab_size)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+
+    losses = []
+    x, y = dataset.get_batch()
+
+    for step in range(5):
+        logits = model(x)
+        #for linear model: loss = F.cross_entropy(logits, y[0])
+        loss = F.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        losses.append(loss.item())
+
+    return model, losses
+
+if __name__ == "__main__":
+    print("running reproducability test")
+
+    model1, losses1 = train_once()
+
+    model2, losses2 = train_once()
+
+    losses_match = (losses1 ==losses2)
+    print(f"Loss curves identical: {losses_match}")
+    
+    params_match = all(
+        torch.equal(p1, p2)
+        for p1, p2 in zip(model1.parameters(), model2.parameters())
+    )
+    print (f"Bitwise parameter match: {params_match}")
+
+    if losses_match and params_match:
+        print("\nSuccess!: Full deterministic gradient flow verified.")
+    else:
+        print ("\nFailure: Entropy led to non-deterministic behavior")

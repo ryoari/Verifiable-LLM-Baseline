@@ -1,0 +1,73 @@
+
+started with linear model,
+output 1:
+
+# verified that seeds can be set
+
+(detgpt-env) PS C:\Users\ryoar\Desktop\GSOC> & c:\Users\ryoar\Desktop\GSOC\detgpt-env\Scripts\python.exe c:/Users/ryoar/Desktop/GSOC/src/main.py
+seed set to 99
+Tensor X:
+tensor([[ 0.6127, -1.1754, -0.7646],
+        [-0.6666,  0.7444, -0.6453],
+        [-1.3890, -0.2730,  0.9406]])
+Deterministic enabled: True
+Input: tensor([0, 1, 2, 3])
+Target: tensor([1, 2, 3, 0])
+
+output 2:
+
+# verified that hashes match in a linear model
+
+(detgpt-env) PS C:\Users\ryoar\Desktop\GSOC> & c:\Users\ryoar\Desktop\GSOC\detgpt-env\Scripts\python.exe c:/Users/ryoar/Desktop/GSOC/src/main.py
+seed set to 99
+Tensor X:
+tensor([[ 0.6127, -1.1754, -0.7646],
+        [-0.6666,  0.7444, -0.6453],
+        [-1.3890, -0.2730,  0.9406]])
+Deterministic enabled: True
+Input: tensor([0, 1, 2, 3])
+Target: tensor([1, 2, 3, 0])
+Step 0, Loss:1.1843723058700562
+Step 1, Loss:1.0755757093429565
+Step 2, Loss:0.9717903733253479
+Step 3, Loss:0.8734948039054871
+Step 4, Loss:0.7810313105583191
+FINAL MODEL HASH: cb0e3c0a1d3b9a74769e65a057c415354c3d8fe8faa8afb7ba944489a4c6ed24     
+
+output 3:
+
+# added in reproducability_test.py to automate the verification
+
+(detgpt-env) PS C:\Users\ryoar\Desktop\GSOC> & c:\Users\ryoar\Desktop\GSOC\detgpt-env\Scripts\python.exe c:/Users/ryoar/Desktop/GSOC/src/reproducibility
+Input: tensor([0, 1, 2, 3])
+Target: tensor([1, 2, 3, 0])
+Step 0, Loss:1.676896333694458
+Step 1, Loss:1.5588276386260986
+Step 2, Loss:1.4446043968200684
+Step 3, Loss:1.3343052864074707
+Step 4, Loss:1.2279143333435059
+FINAL MODEL HASH: b02447baea14334d778597b8616c03afdbc8baa1ecc0e734ce2d3e5431ef9de9
+running reproducability test
+seed set to 99
+seed set to 99
+Loss curves identical: True
+Bitwise parameter match: True
+
+Success!: Full deterministic gradient flow verified.
+ ---
+
+upgraded model to NanoGPT,
+output 1:
+
+#verified deterministic gradient for NanoGPT
+
+(detgpt-env) PS C:\Users\ryoar\Desktop\GSOC> & c:\Users\ryoar\Desktop\GSOC\detgpt-env\Scripts\python.exe c:/Users/ryoar/Desktop/GSOC/src/reproducibility
+Input: tensor([[0, 1, 2, 3]])
+Target: tensor([[1, 2, 3, 0]])
+running reproducability test
+seed set to 99
+seed set to 99
+Loss curves identical: True
+Bitwise parameter match: True
+
+Success!: Full deterministic gradient flow verified.
