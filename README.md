@@ -18,8 +18,8 @@ To solve this, we are isolating software entropy from hardware entropy in phases
   Enforcing `cuDNN.deterministic = True` and locking CUBLAS workspace configurations to force deterministic atomic operations.
 
 ## Phase 1 Execution Details
-* **Architecture:** Deterministic port of Andrej Karpathy's NanoGPT (Self-Attention, no dropout).
-* **Environment:** `torch==2.2.0`, strictly pinned seeds.
+* **Architecture:** Deterministic port of Andrej Karpathy's NanoGPT (Self-Attention, dropout added for Failure Scenario 2).
+* **Environment:** `torch>=2.10.0,<3.0`, strictly pinned seeds.
 * **Dataset:** Deterministic character-level mapping with sequential dataloading.
 
 ### How to Verify
@@ -29,11 +29,10 @@ python src/reproducibility_test.py
 ```
 
 ### Expected Outcome
-The script trains two independent NanoGPT models from scratch and compares them, outputting:
-```
-Loss curves identical: True
-Bitwise parameter match: True
-```
+The script runs a Prover and three independent Auditors to verify mathematically strict determinism and tamper-detection:
+* **Scenario 1 (Clean Audit):** Passes segment replay bit-for-bit.
+* **Scenario 2 (Bad Seed):** Detects environment tampering and fails the audit.
+* **Scenario 3 (Noisy Weights):** Detects a $1 \times 10^{-5}$ parameter injection and accurately quantifies the trajectory drift ($\Delta$).
 
 ## Insight
  reproducibility requires saving not just weights and optimizer state, but the full RNG state.
