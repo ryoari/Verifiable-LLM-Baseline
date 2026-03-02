@@ -33,7 +33,7 @@ print("Target:", y)
 
 
 #for linear Model
-#uncomment this block , when running the liner model code blocks
+#uncomment this block , when running the linear model code blocks
 '''
 import torch.optim as optim
 import torch.nn as nn

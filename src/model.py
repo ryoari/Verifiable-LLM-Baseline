@@ -78,7 +78,7 @@ class TinyGPT(nn.Module):
         return logits
     
 # linear model was the starting point, nanoGPT after
-# Unblock this code block to check the linear model out
+# Uncomment this code block to check the linear model out
 # :ATTENTION: Remember to block out the remaining code blocks
  
 '''
