@@ -1,17 +1,16 @@
-# Environments
 detgpt-env/
 env/
 venv/
 
-# Python Cache
+
 __pycache__/
 *.pyc
 
-# IDEs
+
 .vscode/
 .idea/
 
-# Saved Models (We don't want to push massive binary files later)
+
 *.pt
 *.pth
 *.jsonl
