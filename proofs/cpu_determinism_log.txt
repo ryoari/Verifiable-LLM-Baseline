@@ -71,3 +71,32 @@ Loss curves identical: True
 Bitwise parameter match: True
 
 Success!: Full deterministic gradient flow verified.
+
+output 2:
+
+#verified SEGMENTED AUDIT VERIFICATION for NanoGPT
+
+
+(detgpt-env) PS C:\Users\ryoar\Desktop\GSOC> & c:\Users\ryoar\Desktop\GSOC\detgpt-env\Scripts\python.exe c:/Users/ryoar/Desktop/GSOC/src/reproducibility
+Input: tensor([[0, 1, 2, 3]])
+Target: tensor([[1, 2, 3, 0]])
+
+ SEGMENTED AUDIT VERIFICATION 
+
+[Running Prover: Steps 0 to 10]
+seed set to 99
+ ~> Prover saved checkpoint at step 5
+
+[Running Auditor: Steps 5 to 10 with checkpoint]
+seed set to 99
+ ~> Auditor loaded checkpoint from step 5
+
+[Verifying Telemetry Trajectories]
+Step 5 | Prover Loss: 0.424115 | Auditor Loss: 0.424115 ok
+Step 6 | Prover Loss: 0.339101 | Auditor Loss: 0.339101 ok
+Step 7 | Prover Loss: 0.276479 | Auditor Loss: 0.276479 ok
+Step 8 | Prover Loss: 0.228812 | Auditor Loss: 0.228812 ok
+Step 9 | Prover Loss: 0.192136 | Auditor Loss: 0.192136 ok
+
+ (❁´◡`❁)
+AUDIT PASSED: Segment replay is bitwise deterministic.
