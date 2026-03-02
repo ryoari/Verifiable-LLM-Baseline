@@ -100,3 +100,51 @@ Step 9 | Prover Loss: 0.192136 | Auditor Loss: 0.192136 ok
 
  (❁´◡`❁)
 AUDIT PASSED: Segment replay is bitwise deterministic.
+
+Output 3:
+
+#Failure scenarios, prove the deterministic route is on the right path
+
+(detgpt-env) PS C:\Users\ryoar\Desktop\GSOC> & c:\Users\ryoar\Desktop\GSOC\detgpt-env\Scripts\python.exe c:/Users/ryoar/Desktop/GSOC/src/reproducibility.py
+Input: tensor([[0, 1, 2, 3]])
+Target: tensor([[1, 2, 3, 0]])
+
+ Scenario 1: CLEAN AUDIT
+seed set to 99
+ ~> Prover saved checkpoint at step 5
+ ~> Auditor loaded checkpoint from step 5
+
+[Verifying: CLEAN AUDIT]
+Step 5 | Prover: 0.46740216 | Auditor: 0.46740216 | PASSED
+Step 6 | Prover: 0.36635828 | Auditor: 0.36635828 | PASSED
+Step 7 | Prover: 0.32757840 | Auditor: 0.32757840 | PASSED
+Step 8 | Prover: 0.24821112 | Auditor: 0.24821112 | PASSED
+Step 9 | Prover: 0.21071491 | Auditor: 0.21071491 | PASSED
+
+ (❁´◡`❁) CLEAN AUDIT PASSED: Segment replay is bitwise deterministic.
+
+ Scenario 2: BAD SEED
+seed set to 42
+ ~> Tampered auditor loaded checkpoint with BAD seed (42)
+
+[Verifying: BAD SEED AUDIT]
+Step 5 | Prover: 0.46740216 | Auditor: 0.45238802 | Δ 1.50e-02 FAILED
+Step 6 | Prover: 0.36635828 | Auditor: 0.36516875 | Δ 1.19e-03 FAILED
+Step 7 | Prover: 0.32757840 | Auditor: 0.31266588 | Δ 1.49e-02 FAILED
+Step 8 | Prover: 0.24821112 | Auditor: 0.25075468 | Δ 2.54e-03 FAILED
+Step 9 | Prover: 0.21071491 | Auditor: 0.20944712 | Δ 1.27e-03 FAILED
+
+ (╯°□°）╯︵ ┻━┻  BAD SEED AUDIT FAILED: Trajectories diverged.
+
+ Scenario 3: NOISE INJECTED
+seed set to 99
+ ~> Tampered auditor loaded checkpoint with GOOD seed but will add secret noise to gradients
+
+[Verifying: NOISY WEIGHTS AUDIT]
+Step 5 | Prover: 0.46740216 | Auditor: 0.46379220 | Δ 3.61e-03 FAILED
+Step 6 | Prover: 0.36635828 | Auditor: 0.36285883 | Δ 3.50e-03 FAILED
+Step 7 | Prover: 0.32757840 | Auditor: 0.31422427 | Δ 1.34e-02 FAILED
+Step 8 | Prover: 0.24821112 | Auditor: 0.25160202 | Δ 3.39e-03 FAILED
+Step 9 | Prover: 0.21071491 | Auditor: 0.20851545 | Δ 2.20e-03 FAILED
+
+ (╯°□°）╯︵ ┻━┻  NOISY WEIGHTS AUDIT FAILED: Trajectories diverged.

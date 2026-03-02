@@ -121,9 +121,9 @@ def verify(prover_segment, auditor_logs, label="AUDIT"):
         if not step_ok:
             match = False
             delta = abs(p['loss'] - a['loss'])
-            print(f"Step {p['step']} | Prover: {p['loss']:.8f} | Auditor: {a['loss']:.8f} | Δ {delta:.2e} ❌")
+            print(f"Step {p['step']} | Prover: {p['loss']:.8f} | Auditor: {a['loss']:.8f} | Δ {delta:.2e} FAILED")
         else:
-            print(f"Step {p['step']} | Prover: {p['loss']:.8f} | Auditor: {a['loss']:.8f} | ✅")
+            print(f"Step {p['step']} | Prover: {p['loss']:.8f} | Auditor: {a['loss']:.8f} | PASSED")
 
     if match:
         print(f"\n (❁´◡`❁) {label} PASSED: Segment replay is bitwise deterministic.")
