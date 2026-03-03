@@ -43,8 +43,16 @@ def run_training_segment(start_step, end_step, checkpoint_path_to_load=None, log
     if checkpoint_path_to_load:
         checkpoint = torch.load(checkpoint_path_to_load, weights_only=False)
         model.load_state_dict(checkpoint['model'])
-        optimizer.load_state_dict(checkpoint['optimizer'])
 
+        # verifying cryptographic seal
+        if 'checkpoint_hash' in checkpoint:
+            loaded_hash = logger.hash_model(model)
+            if loaded_hash != checkpoint['checkpoint_hash']:
+                print(f"\n  FATAL ALERT! : Cryptographic seal broken! Checkpoint file was tampered with.")
+                print(f"    Expected: {checkpoint['checkpoint_hash'][:16]}...")
+                print(f"    Got:      {loaded_hash[:16]}...\n")
+
+        optimizer.load_state_dict(checkpoint['optimizer'])
         torch.set_rng_state(checkpoint['rng_state'])
         np.random.set_state(checkpoint['numpy_rng'])
         random.setstate(checkpoint['python_rng'])
@@ -170,6 +178,28 @@ def sabotage_auditor(log_file="post_sabotage_log.jsonl"):
     print(f" ~> Weights silently mutated after training completed")
     return model
 
+def broken_seal_auditor(log_file="broken_seal_log.jsonl"):
+    #Test 4: attacker intercepts file, corrupts weights, but leaves the original hash intact to bypass integrity check, auditor loads corrupted file and runs audit
+
+    #weights corrupted
+    checkpoint = torch.load("mid_checkpoint.pt", weights_only=False)
+    
+    #modify weights slightly
+    checkpoint['model']['lm_head.weight'] += 1e-5 
+    
+    #save the poisoned file (the original embedded hash remains unchanged)
+    torch.save(checkpoint, "corrupted_checkpoint.pt")
+    print(f" ~> Attacker corrupted weights and saved to corrupted_checkpoint.pt")
+
+    #auditor loads the poisoned file
+    model = run_training_segment(
+        start_step=TRAIN_CONFIG["checkpoint_step"], 
+        end_step=TRAIN_CONFIG["total_steps"], 
+        checkpoint_path_to_load="corrupted_checkpoint.pt", 
+        log_file=log_file
+    )
+    return model
+
 def verify(prover_segment, auditor_logs, prover_hash, auditor_hash, label="AUDIT"):
     """Shared verification logic with drift quantification and cryptographic anchor."""
     print(f"\n[Verifying: {label}]")
@@ -249,6 +279,19 @@ if __name__ == "__main__":
         prover_logs[CP_STEP:TOT_STEP], post_sabotage_logs,
         hash_model(prover_model), hash_model(sabotage_model),
         label="POST-TRAINING SABOTAGE AUDIT"
+    )
+
+    # Test 4: Tampered Checkpoint File (Broken Seal)
+    print("\n Scenario 5: MODIFIED CHECKPOINT FILE (BROKEN SEAL)")
+    broken_seal_model = broken_seal_auditor()
+
+    with open("broken_seal_log.jsonl") as f:
+        broken_seal_logs = [json.loads(line) for line in f]
+
+    verify(
+        prover_logs[CP_STEP:TOT_STEP], broken_seal_logs,
+        hash_model(prover_model), hash_model(broken_seal_model),
+        label="BROKEN SEAL AUDIT"
     )
 
 # Uncomment the following lines to run only the Segmented audit verification:

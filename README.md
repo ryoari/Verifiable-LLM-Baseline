@@ -38,6 +38,7 @@ The script runs a Prover and three independent Auditors to verify mathematically
 * **Scenario 2**: proves it catches wrong randomness
 * **Scenario 3**: proves it catches microscopic in-training tampering
 * **Scenario 4**: proves it catches post-training weight substitution
+* **Scenario 5 (Broken Seal):** Detects "at-rest" file corruption by verifying the embedded cryptographic seal upon checkpoint load.
 
 ## Insight
  Reproducibility requires saving not just weights and optimizer state, but the full RNG state.
