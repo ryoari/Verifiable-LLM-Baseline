@@ -3,10 +3,19 @@ import torch.nn.functional as F
 import json
 import math
 import platform, sys
+import hashlib
+import random
+import numpy as np
 from model import TinyGPT
 from dataset import TinyDataset
 from main import set_seed
 from telemetry import TelemetryLogger
+
+def hash_model(model):
+    h = hashlib.sha256()
+    for p in model.parameters():
+        h.update(p.data.cpu().numpy().tobytes())
+    return h.hexdigest()
 
 def run_training_segment(start_step, end_step, checkpoint_path_to_load=None, log_file="audit.jsonl"):
     if not checkpoint_path_to_load:
@@ -20,8 +29,11 @@ def run_training_segment(start_step, end_step, checkpoint_path_to_load=None, log
         checkpoint = torch.load(checkpoint_path_to_load, weights_only=True)
         model.load_state_dict(checkpoint['model'])
         optimizer.load_state_dict(checkpoint['optimizer'])
+
         torch.set_rng_state(checkpoint['rng_state'])
-        print(f" ~> Auditor loaded checkpoint from step {start_step}")
+        np.random.set_state(checkpoint['numpy_rng'])
+        random.setstate(checkpoint['python_rng'])
+        print(f" ~> Auditor loaded checkpoint & RNG states from step {start_step}")
 
     x, y = dataset.get_batch()
 
@@ -39,10 +51,13 @@ def run_training_segment(start_step, end_step, checkpoint_path_to_load=None, log
             torch.save({
                 'model': model.state_dict(),
                 'optimizer': optimizer.state_dict(),
-                'rng_state':torch.get_rng_state(),
-                'numpy_rng': torch.initial_seed()
+                'rng_state': torch.get_rng_state(),
+                'numpy_rng': np.random.get_state(),
+                'python_rng': random.getstate()
             }, "mid_checkpoint.pt")
             print(f" ~> Prover saved checkpoint at step 5")
+        
+    return logger.hash_model(model)
 
 def bad_seed_auditor(log_file="bad_seed_log.jsonl"):
     #test 1: correct checkpoint, wrong seed
@@ -102,8 +117,8 @@ def secret_noise_auditor(log_file="secret_noise_log.jsonl"):
         optimizer.step()
         logger.log_step(step, loss.item(), model)
 
-def verify(prover_segment, auditor_logs, label="AUDIT"):
-    """Shared verification logic with drift quantification."""
+def verify(prover_segment, auditor_logs, prover_hash, auditor_hash, label="AUDIT"):
+    """Shared verification logic with drift quantification and cryptographic anchor."""
     print(f"\n[Verifying: {label}]")
 
     if len(prover_segment) != len(auditor_logs):
@@ -125,7 +140,11 @@ def verify(prover_segment, auditor_logs, label="AUDIT"):
         else:
             print(f"Step {p['step']} | Prover: {p['loss']:.8f} | Auditor: {a['loss']:.8f} | PASSED")
 
-    if match:
+    hash_match = (prover_hash == auditor_hash)
+    if not hash_match:
+        print(f"\n Hash mismatch! Prover hash: {prover_hash[:16]} // Auditor hash: {auditor_hash[:16]} [HASH ERROR]")
+
+    if match and hash_match:
         print(f"\n (❁´◡`❁) {label} PASSED: Segment replay is bitwise deterministic.")
     else:
         print(f"\n (╯°□°）╯︵ ┻━┻  {label} FAILED: Trajectories diverged.")
@@ -135,33 +154,33 @@ def verify(prover_segment, auditor_logs, label="AUDIT"):
 if __name__ == "__main__":
     # Baseline: should pass
     print("\n Scenario 1: CLEAN AUDIT ")
-    run_training_segment(start_step=0, end_step=10, log_file="prover_log.jsonl")
-    run_training_segment(start_step=5, end_step=10, checkpoint_path_to_load="mid_checkpoint.pt", log_file="auditor_log.jsonl")
+    prover_model = run_training_segment(start_step=0, end_step=10, log_file="prover_log.jsonl")
+    auditor_model = run_training_segment(start_step=5, end_step=10, checkpoint_path_to_load="mid_checkpoint.pt", log_file="auditor_log.jsonl")
 
     with open("prover_log.jsonl") as f:
         prover_logs = [json.loads(line) for line in f]
     with open("auditor_log.jsonl") as f:
         auditor_logs = [json.loads(line) for line in f]
 
-    verify(prover_logs[5:10], auditor_logs, label="CLEAN AUDIT")
+    verify(prover_logs[5:10], auditor_logs, hash_model(prover_model), hash_model(auditor_model), label="CLEAN AUDIT")
 
     # Test 1: Bad seed: should fail
     print("\n Scenario 2: BAD SEED")
-    bad_seed_auditor()
+    bad_model=bad_seed_auditor()
 
     with open("bad_seed_log.jsonl") as f:
         tampered_logs = [json.loads(line) for line in f]
 
-    verify(prover_logs[5:10], tampered_logs, label="BAD SEED AUDIT")
+    verify(prover_logs[5:10], tampered_logs, hash_model(prover_model), hash_model(bad_model), label="BAD SEED AUDIT")
 
     # Test 2: Noisy weights: should fail 
     print("\n Scenario 3: NOISE INJECTED")
-    secret_noise_auditor()
+    noisey_model = secret_noise_auditor()
 
     with open("secret_noise_log.jsonl") as f:
         noisy_logs = [json.loads(line) for line in f]
 
-    verify(prover_logs[5:10], noisy_logs, label="NOISY WEIGHTS AUDIT")
+    verify(prover_logs[5:10], noisy_logs, hash_model(prover_model), hash_model(noisey_model), label="NOISY WEIGHTS AUDIT")
 
 # Uncomment the following lines to run only the Segmented audit verification:
 '''           
