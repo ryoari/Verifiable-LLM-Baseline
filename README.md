@@ -8,7 +8,7 @@ The objective is to eliminate controllable sources of software entropy during tr
 Given identical configuration, data, and environment, repeated runs must produce bitwise-identical model checkpoints.
 
 ## The Verification Roadmap: Why Start on CPU?
-Modern GPUs optimize for maximum throughput by executing thousands of parallel threads and combining results via atomic additions. Because thread completion order is non-deterministic, the order of floating-point addition changes across runs. Due to non-associativity—where $(a+b)+c \neq a+(b+c)$—This introduces small numerical drift across runs due to floating-point non-associativity.
+Modern GPUs optimize for maximum throughput by executing thousands of parallel threads and combining results via atomic additions. Because thread completion order is non-deterministic, the order of floating-point addition changes across runs. Due to non-associativity where $(a+b)+c \neq a+(b+c)$. This introduces small numerical drift across runs due to floating-point non-associativity.
 
 To solve this, we are isolating software entropy from hardware entropy in phases:
 
@@ -48,4 +48,4 @@ The script runs a Prover and independent Auditors to verify mathematically stric
 A key implementation detail is that reproducibility requires serialization of full RNG state (Python, NumPy, and Torch), not only model and optimizer weights.
 
 #### A note on tooling: 
-The architecture, experiments, and proofs in this repository are my own work. I used LLMs as a pair-programming aid — to accelerate implementation, debug PyTorch internals, and sharpen documentation. LLMs were used as a development aid (debugging, documentation, iteration). System design, verification logic, and experimental validation were independently implemented and evaluated.
+The architecture, experiments, and proofs in this repository are my own work. I used LLMs as a pair-programming aid - to accelerate implementation, debug PyTorch internals, and sharpen documentation. LLMs were used as a development aid (debugging, documentation, iteration). System design, verification logic, and experimental validation were independently implemented and evaluated.
