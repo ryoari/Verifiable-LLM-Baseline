@@ -39,7 +39,7 @@ The script runs a Prover and three independent Auditors to verify mathematically
 * **Scenario 4**: proves it catches post-training weight substitution
 
 ## Insight
- reproducibility requires saving not just weights and optimizer state, but the full RNG state.
+ Reproducibility requires saving not just weights and optimizer state, but the full RNG state.
 
 #### A note on tooling: 
 The architecture, experiments, and proofs in this repository are my own work. I used LLMs as a pair-programming aid — to accelerate implementation, debug PyTorch internals, and sharpen documentation. All design decisions, verification, and results are my own.
