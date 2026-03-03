@@ -26,7 +26,7 @@ def run_training_segment(start_step, end_step, checkpoint_path_to_load=None, log
     logger = TelemetryLogger(filepath=log_file)
 
     if checkpoint_path_to_load:
-        checkpoint = torch.load(checkpoint_path_to_load, weights_only=True)
+        checkpoint = torch.load(checkpoint_path_to_load, weights_only=False)
         model.load_state_dict(checkpoint['model'])
         optimizer.load_state_dict(checkpoint['optimizer'])
 
@@ -57,7 +57,7 @@ def run_training_segment(start_step, end_step, checkpoint_path_to_load=None, log
             }, "mid_checkpoint.pt")
             print(f" ~> Prover saved checkpoint at step 5")
         
-    return logger.hash_model(model)
+    return model
 
 def bad_seed_auditor(log_file="bad_seed_log.jsonl"):
     #test 1: correct checkpoint, wrong seed
@@ -67,7 +67,7 @@ def bad_seed_auditor(log_file="bad_seed_log.jsonl"):
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
     logger = TelemetryLogger(filepath=log_file)
 
-    checkpoint = torch.load("mid_checkpoint.pt", weights_only=True)
+    checkpoint = torch.load("mid_checkpoint.pt", weights_only=False)
     model.load_state_dict(checkpoint['model'])
     optimizer.load_state_dict(checkpoint['optimizer'])
 
@@ -83,6 +83,7 @@ def bad_seed_auditor(log_file="bad_seed_log.jsonl"):
         loss.backward()
         optimizer.step()
         logger.log_step(step, loss.item(), model)
+    return model
     
 def secret_noise_auditor(log_file="secret_noise_log.jsonl"):
     #test 2: correct checkpoint, correct seed, but secret noise added to gradients
@@ -94,7 +95,7 @@ def secret_noise_auditor(log_file="secret_noise_log.jsonl"):
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
     logger = TelemetryLogger(filepath=log_file)
 
-    checkpoint = torch.load("mid_checkpoint.pt", weights_only=True)
+    checkpoint = torch.load("mid_checkpoint.pt", weights_only=False)
     model.load_state_dict(checkpoint['model'])
     optimizer.load_state_dict(checkpoint['optimizer'])
 
@@ -116,6 +117,39 @@ def secret_noise_auditor(log_file="secret_noise_log.jsonl"):
 
         optimizer.step()
         logger.log_step(step, loss.item(), model)
+    return model
+
+def sabotage_auditor(log_file="post_sabotage_log.jsonl"):
+    #Test 3: correct replay, but weights silently modified after training ends.
+
+    dataset = TinyDataset()
+    model = TinyGPT(vocab_size=dataset.vocab_size)
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    logger = TelemetryLogger(filepath=log_file)
+
+    checkpoint = torch.load("mid_checkpoint.pt", weights_only=False)
+    model.load_state_dict(checkpoint['model'])
+    optimizer.load_state_dict(checkpoint['optimizer'])
+    torch.set_rng_state(checkpoint['rng_state'])
+    print(f" ~> Post-sabotage auditor loaded checkpoint correctly")
+
+    x, y = dataset.get_batch()
+
+    for step in range(5, 10):
+        logits = model(x)
+        loss = F.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        logger.log_step(step, loss.item(), model)
+
+    #silent mutation of weights after training
+    with torch.no_grad():
+        for p in model.parameters():
+            p.data += torch.randn_like(p) * 1e-6
+
+    print(f" ~> Weights silently mutated after training completed")
+    return model
 
 def verify(prover_segment, auditor_logs, prover_hash, auditor_hash, label="AUDIT"):
     """Shared verification logic with drift quantification and cryptographic anchor."""
@@ -181,6 +215,19 @@ if __name__ == "__main__":
         noisy_logs = [json.loads(line) for line in f]
 
     verify(prover_logs[5:10], noisy_logs, hash_model(prover_model), hash_model(noisey_model), label="NOISY WEIGHTS AUDIT")
+
+    # Test 3: Post-training sabotage, hash fail 
+    print("\n Scenario 4: POST-TRAINING WEIGHT SABOTAGE")
+    sabotage_model = sabotage_auditor()
+
+    with open("post_sabotage_log.jsonl") as f:
+        post_sabotage_logs = [json.loads(line) for line in f]
+
+    verify(
+        prover_logs[5:10], post_sabotage_logs,
+        hash_model(prover_model), hash_model(sabotage_model),
+        label="POST-TRAINING SABOTAGE AUDIT"
+    )
 
 # Uncomment the following lines to run only the Segmented audit verification:
 '''           

@@ -30,10 +30,13 @@ python src/reproducibility_test.py
 
 ### Expected Outcome
 The script runs a Prover and three independent Auditors to verify mathematically strict determinism and tamper-detection:
-* **Scenario 1 (Clean Audit):** Passes segment replay bit-for-bit.
-* **Scenario 2 (Bad Seed):** Detects environment tampering and fails the audit.
-* **Scenario 3 (Noisy Weights):**
-    Detects a $1 \times 10^{-10}$ parameter injection and accurately quantifies the trajectory drift ($\Delta$).
+
+#### Current falsifiability test suite:
+
+* **Scenario 1**: proves the system can pass when everything is honest
+* **Scenario 2**: proves it catches wrong randomness
+* **Scenario 3**: proves it catches microscopic in-training tampering
+* **Scenario 4**: proves it catches post-training weight substitution
 
 ## Insight
  reproducibility requires saving not just weights and optimizer state, but the full RNG state.
