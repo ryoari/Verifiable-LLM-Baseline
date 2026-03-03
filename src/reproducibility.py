@@ -18,12 +18,26 @@ def hash_model(model):
         h.update(p.data.cpu().numpy().tobytes())
     return h.hexdigest()
 
-def run_training_segment(start_step, end_step, checkpoint_path_to_load=None, log_file="audit.jsonl"):
+def run_training_segment(start_step, end_step, checkpoint_path_to_load=None, log_file="audit.jsonl", seed=None, tamper_weights=False):
+    
+    active_seed = seed if seed is not None else TRAIN_CONFIG["seed"]
+    active_end_step = end_step if end_step is not None else TRAIN_CONFIG["total_steps"]
+
     if not checkpoint_path_to_load:
-        set_seed(99)
+        set_seed(active_seed)
+
     dataset = TinyDataset()
-    model = TinyGPT(vocab_size=dataset.vocab_size)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+
+    model = TinyGPT(
+        vocab_size=dataset.vocab_size,
+        embed_dim=TRAIN_CONFIG["embed_dim"],
+        num_heads=TRAIN_CONFIG["num_heads"],
+        max_seq_len=TRAIN_CONFIG["max_seq_len"],
+        dropout=TRAIN_CONFIG["dropout"]
+        )
+    
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=TRAIN_CONFIG["lr"])
     logger = TelemetryLogger(filepath=log_file)
 
     if checkpoint_path_to_load:
@@ -48,7 +62,7 @@ def run_training_segment(start_step, end_step, checkpoint_path_to_load=None, log
 
         logger.log_step(step, loss.item(), model)
 
-        if not checkpoint_path_to_load and step == 4:
+        if not checkpoint_path_to_load and step == (TRAIN_CONFIG["checkpoint_step"] - 1):
             torch.save({
                 'model': model.state_dict(),
                 'optimizer': optimizer.state_dict(),
@@ -56,7 +70,7 @@ def run_training_segment(start_step, end_step, checkpoint_path_to_load=None, log
                 'numpy_rng': np.random.get_state(),
                 'python_rng': random.getstate()
             }, "mid_checkpoint.pt")
-            print(f" ~> Prover saved checkpoint at step 5")
+            print(f" ~> Prover saved checkpoint at step {TRAIN_CONFIG['checkpoint_step']}")
         
     return model
 
@@ -64,8 +78,8 @@ def bad_seed_auditor(log_file="bad_seed_log.jsonl"):
     #test 1: correct checkpoint, wrong seed
 
     dataset = TinyDataset()
-    model = TinyGPT(vocab_size=dataset.vocab_size)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    model = TinyGPT(vocab_size=dataset.vocab_size, embed_dim=TRAIN_CONFIG["embed_dim"], num_heads=TRAIN_CONFIG["num_heads"], max_seq_len=TRAIN_CONFIG["max_seq_len"], dropout=TRAIN_CONFIG["dropout"])
+    optimizer = torch.optim.Adam(model.parameters(), lr=TRAIN_CONFIG["lr"])
     logger = TelemetryLogger(filepath=log_file)
 
     checkpoint = torch.load("mid_checkpoint.pt", weights_only=False)
@@ -77,7 +91,7 @@ def bad_seed_auditor(log_file="bad_seed_log.jsonl"):
 
     x, y = dataset.get_batch()
 
-    for step in range(5, 10):
+    for step in range(TRAIN_CONFIG["checkpoint_step"], TRAIN_CONFIG["total_steps"]):
         logits = model(x)
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
         optimizer.zero_grad()
@@ -89,11 +103,11 @@ def bad_seed_auditor(log_file="bad_seed_log.jsonl"):
 def secret_noise_auditor(log_file="secret_noise_log.jsonl"):
     #test 2: correct checkpoint, correct seed, but secret noise added to gradients
 
-    set_seed(99) #GOOD SEED
+    set_seed(TRAIN_CONFIG["seed"]) #GOOD SEED
 
     dataset = TinyDataset()
-    model = TinyGPT(vocab_size=dataset.vocab_size)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    model = TinyGPT(vocab_size=dataset.vocab_size, embed_dim=TRAIN_CONFIG["embed_dim"], num_heads=TRAIN_CONFIG["num_heads"], max_seq_len=TRAIN_CONFIG["max_seq_len"], dropout=TRAIN_CONFIG["dropout"])
+    optimizer = torch.optim.Adam(model.parameters(), lr=TRAIN_CONFIG["lr"])
     logger = TelemetryLogger(filepath=log_file)
 
     checkpoint = torch.load("mid_checkpoint.pt", weights_only=False)
@@ -104,7 +118,7 @@ def secret_noise_auditor(log_file="secret_noise_log.jsonl"):
 
     x, y = dataset.get_batch()
 
-    for step in range(5, 10):
+    for step in range(TRAIN_CONFIG["checkpoint_step"], TRAIN_CONFIG["total_steps"]):
         logits = model(x)
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
         optimizer.zero_grad()
@@ -124,8 +138,8 @@ def sabotage_auditor(log_file="post_sabotage_log.jsonl"):
     #Test 3: correct replay, but weights silently modified after training ends.
 
     dataset = TinyDataset()
-    model = TinyGPT(vocab_size=dataset.vocab_size)
-    optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+    model = TinyGPT(vocab_size=dataset.vocab_size, embed_dim=TRAIN_CONFIG["embed_dim"], num_heads=TRAIN_CONFIG["num_heads"], max_seq_len=TRAIN_CONFIG["max_seq_len"], dropout=TRAIN_CONFIG["dropout"])
+    optimizer = torch.optim.Adam(model.parameters(), lr=TRAIN_CONFIG["lr"])
     logger = TelemetryLogger(filepath=log_file)
 
     checkpoint = torch.load("mid_checkpoint.pt", weights_only=False)
@@ -136,7 +150,7 @@ def sabotage_auditor(log_file="post_sabotage_log.jsonl"):
 
     x, y = dataset.get_batch()
 
-    for step in range(5, 10):
+    for step in range(TRAIN_CONFIG["checkpoint_step"], TRAIN_CONFIG["total_steps"]):
         logits = model(x)
         loss = F.cross_entropy(logits.view(-1, logits.size(-1)), y.view(-1))
         optimizer.zero_grad()
@@ -180,24 +194,27 @@ def verify(prover_segment, auditor_logs, prover_hash, auditor_hash, label="AUDIT
         print(f"\n Hash mismatch! Prover hash: {prover_hash[:16]} // Auditor hash: {auditor_hash[:16]} [HASH ERROR]")
 
     if match and hash_match:
-        print(f"\n (❁´◡`❁) {label} PASSED: Segment replay is bitwise deterministic.")
+        print(f"\n (❁ ´◡`❁) {label} PASSED: Segment replay is bitwise deterministic.")
     else:
         print(f"\n (╯°□°）╯︵ ┻━┻  {label} FAILED: Trajectories diverged.")
 
     return match
 
 if __name__ == "__main__":
+    CP_STEP = TRAIN_CONFIG["checkpoint_step"]
+    TOT_STEP = TRAIN_CONFIG["total_steps"]
+
     # Baseline: should pass
     print("\n Scenario 1: CLEAN AUDIT ")
-    prover_model = run_training_segment(start_step=0, end_step=10, log_file="prover_log.jsonl")
-    auditor_model = run_training_segment(start_step=5, end_step=10, checkpoint_path_to_load="mid_checkpoint.pt", log_file="auditor_log.jsonl")
+    prover_model = run_training_segment(start_step=0, end_step=TOT_STEP, log_file="prover_log.jsonl")
+    auditor_model = run_training_segment(start_step=CP_STEP, end_step=TOT_STEP, checkpoint_path_to_load="mid_checkpoint.pt", log_file="auditor_log.jsonl")
 
     with open("prover_log.jsonl") as f:
         prover_logs = [json.loads(line) for line in f]
     with open("auditor_log.jsonl") as f:
         auditor_logs = [json.loads(line) for line in f]
 
-    verify(prover_logs[5:10], auditor_logs, hash_model(prover_model), hash_model(auditor_model), label="CLEAN AUDIT")
+    verify(prover_logs[CP_STEP:TOT_STEP], auditor_logs, hash_model(prover_model), hash_model(auditor_model), label="CLEAN AUDIT")
 
     # Test 1: Bad seed: should fail
     print("\n Scenario 2: BAD SEED")
@@ -206,7 +223,7 @@ if __name__ == "__main__":
     with open("bad_seed_log.jsonl") as f:
         tampered_logs = [json.loads(line) for line in f]
 
-    verify(prover_logs[5:10], tampered_logs, hash_model(prover_model), hash_model(bad_model), label="BAD SEED AUDIT")
+    verify(prover_logs[CP_STEP:TOT_STEP], tampered_logs, hash_model(prover_model), hash_model(bad_model), label="BAD SEED AUDIT")
 
     # Test 2: Noisy weights: should fail 
     print("\n Scenario 3: NOISE INJECTED")
@@ -215,7 +232,7 @@ if __name__ == "__main__":
     with open("secret_noise_log.jsonl") as f:
         noisy_logs = [json.loads(line) for line in f]
 
-    verify(prover_logs[5:10], noisy_logs, hash_model(prover_model), hash_model(noisey_model), label="NOISY WEIGHTS AUDIT")
+    verify(prover_logs[CP_STEP:TOT_STEP], noisy_logs, hash_model(prover_model), hash_model(noisey_model), label="NOISY WEIGHTS AUDIT")
 
     # Test 3: Post-training sabotage, hash fail 
     print("\n Scenario 4: POST-TRAINING WEIGHT SABOTAGE")
@@ -225,7 +242,7 @@ if __name__ == "__main__":
         post_sabotage_logs = [json.loads(line) for line in f]
 
     verify(
-        prover_logs[5:10], post_sabotage_logs,
+        prover_logs[CP_STEP:TOT_STEP], post_sabotage_logs,
         hash_model(prover_model), hash_model(sabotage_model),
         label="POST-TRAINING SABOTAGE AUDIT"
     )

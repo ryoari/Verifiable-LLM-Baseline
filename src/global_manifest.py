@@ -4,6 +4,7 @@ import torch
 import sys
 import platform
 from dataset import TinyDataset
+from config import TRAIN_CONFIG, get_config_hash
 
 def hash_dict(d):
     # Sort keys to ensure deterministic JSON stringification
@@ -11,7 +12,7 @@ def hash_dict(d):
     return hashlib.sha256(encoded).hexdigest()
 
 def generate_global_manifest():
-    print("Generating Global Verification Manifest...")
+    print("Generating The Global Verification Manifest...")
 
     # 1. Environment Fingerprint
     env_fingerprint = {
@@ -22,23 +23,13 @@ def generate_global_manifest():
     env_hash = hash_dict(env_fingerprint)
 
     # 2. Configuration Hash
-    config = {
-        "embed_dim": 16,
-        "num_heads": 2,
-        "max_seq_len": 32,
-        "dropout": 0.1,
-        "lr": 0.01,
-        "optimizer": "Adam",
-        "seed": 99,
-        "steps": 10
-    }
-    config_hash = hash_dict(config)
+    config_hash = get_config_hash()
 
     # 3. Dataset Hash
     dataset = TinyDataset()
     dataset_hash = hashlib.sha256(dataset.encoded.numpy().tobytes()).hexdigest()
 
-    # 4. Model Checkpoint Hash (raw file bytes)
+    # 4. Model Hash 
     with open("mid_checkpoint.pt", "rb") as f:
         model_hash = hashlib.sha256(f.read()).hexdigest()
 
