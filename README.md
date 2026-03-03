@@ -34,7 +34,7 @@ python src/reproducibility_test.py
 ```
 
 ### Expected Outcome
-The script runs a Prover and three independent Auditors to verify mathematically strict determinism and tamper-detection:
+The script runs a Prover and independent Auditors to verify mathematically strict determinism and tamper-detection:
 
 #### Current falsifiability test suite:
 
