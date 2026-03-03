@@ -10,6 +10,7 @@ from model import TinyGPT
 from dataset import TinyDataset
 from main import set_seed
 from telemetry import TelemetryLogger
+from config import TRAIN_CONFIG
 
 def hash_model(model):
     h = hashlib.sha256()
