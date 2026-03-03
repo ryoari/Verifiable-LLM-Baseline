@@ -63,12 +63,16 @@ def run_training_segment(start_step, end_step, checkpoint_path_to_load=None, log
         logger.log_step(step, loss.item(), model)
 
         if not checkpoint_path_to_load and step == (TRAIN_CONFIG["checkpoint_step"] - 1):
+
+            current_model_hash = logger.hash_model(model)
+            
             torch.save({
                 'model': model.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'rng_state': torch.get_rng_state(),
                 'numpy_rng': np.random.get_state(),
-                'python_rng': random.getstate()
+                'python_rng': random.getstate(),
+                'model_hash': current_model_hash
             }, "mid_checkpoint.pt")
             print(f" ~> Prover saved checkpoint at step {TRAIN_CONFIG['checkpoint_step']}")
         
