@@ -3,6 +3,7 @@ import hashlib
 import torch
 import sys
 import platform
+import os
 from dataset import TinyDataset
 from config import TRAIN_CONFIG, get_config_hash
 
@@ -12,6 +13,9 @@ def hash_dict(d):
     return hashlib.sha256(encoded).hexdigest()
 
 def generate_global_manifest():
+    if not os.path.exists("eval_manifest.json"):
+        raise RuntimeError("Missing eval_manifest.json. Please run src/eval.py first to generate the evaluation hashes.")
+
     print("Generating The Global Verification Manifest...")
 
     # 1. Environment Fingerprint
