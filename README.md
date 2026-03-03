@@ -18,8 +18,9 @@ To solve this, we are isolating software entropy from hardware entropy in phases
   Enforcing `cuDNN.deterministic = True` and locking CUBLAS workspace configurations to force deterministic atomic operations.
 
 ## Phase 1 Execution Details
-* **Architecture:** Deterministic port of Andrej Karpathy's NanoGPT (Self-Attention, dropout added for Failure Scenario 2).
-* **Environment:** `torch>=2.10.0,<3.0`, strictly pinned seeds.
+* **Architecture:** Deterministic port of Andrej Karpathy's NanoGPT.
+* **Algorithmic Entropy:** `dropout=0.1` is intentionally kept active during training. This proves that our environment control is strict enough to perfectly synchronize algorithmic RNG states (like dropout masks) across segmented replays.
+* **Environment:** `torch==2.2.0`, strictly pinned seeds, and full Python/NumPy/Torch RNG state serialization.
 * **Dataset:** Deterministic character-level mapping with sequential dataloading.
 
 ### How to Verify

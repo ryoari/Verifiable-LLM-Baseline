@@ -6,6 +6,7 @@ import hashlib
 from model import TinyGPT
 from dataset import TinyDataset
 from main import set_seed
+from config import TRAIN_CONFIG
 
 def hash_model(model):
     h = hashlib.sha256()
@@ -18,10 +19,16 @@ def hash_dict(d):
     return hashlib.sha256(encoded).hexdigest()
 
 if __name__ == "__main__":
-    set_seed(99)
+    set_seed(TRAIN_CONFIG["seed"])
 
     dataset = TinyDataset()
-    model = TinyGPT(vocab_size=dataset.vocab_size)
+    model = TinyGPT(
+        vocab_size=dataset.vocab_size,
+        embed_dim=TRAIN_CONFIG["embed_dim"],
+        num_heads=TRAIN_CONFIG["num_heads"],
+        max_seq_len=TRAIN_CONFIG["max_seq_len"],
+        dropout=TRAIN_CONFIG["dropout"]
+        )
 
     checkpoint = torch.load("mid_checkpoint.pt", weights_only=False)
     model.load_state_dict(checkpoint['model'])
@@ -42,12 +49,14 @@ if __name__ == "__main__":
     print(f" ~> Eval loss:    {loss.item():.8f}")
     print(f" ~> Perplexity:   {perplexity:.5f}")
 
+    eval_data_hash = hashlib.sha256(dataset.encoded.numpy().tobytes()).hexdigest()
+
     # Build manifest — hash is computed over content, not including itself
     manifest = {
         "model_checkpoint_hash": model_hash,
-        "eval_dataset": "lorem ipsum dolor sit amet",
-        "eval_loss": round(loss.item(), 8),
-        "perplexity": round(perplexity, 5),
+        "eval_dataset": eval_data_hash,
+        "eval_loss": loss.item(),
+        "perplexity": perplexity,
     }
     manifest["eval_manifest_hash"] = hash_dict(manifest)
 
